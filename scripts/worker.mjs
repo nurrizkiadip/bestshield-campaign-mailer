@@ -36,8 +36,10 @@ export async function processJob(job, dbConnection, emailTransporter) {
   if (Array.isArray(customerIds) && customerIds.length > 0) {
     const placeholders = customerIds.map(() => '?').join(',');
     customers = dbConnection.prepare(`SELECT id, name, email FROM customers WHERE id IN (${placeholders})`).all(...customerIds);
-  } else {
+  } else if (limit !== undefined && offset !== undefined) {
     customers = dbConnection.prepare('SELECT id, name, email FROM customers LIMIT ? OFFSET ?').all(limit, offset);
+  } else {
+    throw new Error('Invalid job data: Job must provide customerIds or both limit and offset');
   }
 
   let success = 0;

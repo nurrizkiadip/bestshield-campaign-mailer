@@ -28,7 +28,10 @@ export async function triggerCampaign(customerIds: number[], sendToAll: boolean)
   let totalTargeted = 0;
   let totalBatches = 0;
 
-  if (!sendToAll && Array.isArray(customerIds) && customerIds.length > 0) {
+  if (!sendToAll) {
+    if (!Array.isArray(customerIds) || customerIds.length === 0) {
+      throw new Error('No customers selected for the campaign.');
+    }
     totalTargeted = customerIds.length;
     totalBatches = Math.ceil(totalTargeted / BATCH_SIZE);
 

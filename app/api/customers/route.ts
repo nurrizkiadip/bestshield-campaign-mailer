@@ -3,8 +3,11 @@ import { getPaginatedCustomers } from '@/services/customerService';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const page = parseInt(searchParams.get('page') || '1', 10);
-  const limit = parseInt(searchParams.get('limit') || '20', 10);
+  let page = parseInt(searchParams.get('page') || '1', 10);
+  let limit = parseInt(searchParams.get('limit') || '20', 10);
+
+  if (isNaN(page) || page < 1) page = 1;
+  if (isNaN(limit) || limit < 1) limit = 20;
 
   try {
     const result = await getPaginatedCustomers(page, limit);
