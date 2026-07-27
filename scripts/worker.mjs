@@ -28,44 +28,50 @@ const transporter = nodemailer.createTransport({
   tls: { rejectUnauthorized: false },
 });
 
+export async function processJob(job, dbConnection, emailTransporter) {
+  const { customerIds, offset, limit, batchIndex, totalBatches } = job.data;
+  console.log(`[Batch ${batchIndex}/${totalBatches}] Processing Job ${job.id}...`);
+
+  let customers = [];
+  if (Array.isArray(customerIds) && customerIds.length > 0) {
+    const placeholders = customerIds.map(() => '?').join(',');
+    customers = dbConnection.prepare(`SELECT id, name, email FROM customers WHERE id IN (${placeholders})`).all(...customerIds);
+  } else if (limit !== undefined && offset !== undefined) {
+    customers = dbConnection.prepare('SELECT id, name, email FROM customers LIMIT ? OFFSET ?').all(limit, offset);
+  } else {
+    throw new Error('Invalid job data: Job must provide customerIds or both limit and offset');
+  }
+
+  let success = 0;
+  let failed = 0;
+
+  // Execute nodemailer requests concurrently in the batch for maximum speed
+  await Promise.all(
+    customers.map(async (c) => {
+      try {
+        await emailTransporter.sendMail({
+          from: '"BestShield Campaign" <campaign@bestshield.com>',
+          to: c.email,
+          subject: `Special Announcement for ${c.name}`,
+          text: `Hello ${c.name},\n\nWe have an exciting update for you! Thank you for being a valued customer.\n\nBest regards,\nThe BestShield Team`,
+        });
+        success++;
+      } catch (e) {
+        failed++;
+      }
+    })
+  );
+
+  console.log(`[Batch ${batchIndex}/${totalBatches}] Completed. Sent: ${success}, Failed: ${failed}`);
+  return { success, failed, batchIndex };
+}
+
 console.log('Starting BullMQ Campaign Worker...');
 
 const worker = new Worker(
   'campaignQueue',
   async (job) => {
-    const { customerIds, offset, limit, batchIndex, totalBatches } = job.data;
-    console.log(`[Batch ${batchIndex}/${totalBatches}] Processing Job ${job.id}...`);
-
-    let customers = [];
-    if (Array.isArray(customerIds) && customerIds.length > 0) {
-      const placeholders = customerIds.map(() => '?').join(',');
-      customers = db.prepare(`SELECT * FROM customers WHERE id IN (${placeholders})`).all(...customerIds);
-    } else {
-      customers = db.prepare('SELECT * FROM customers LIMIT ? OFFSET ?').all(limit, offset);
-    }
-
-    let success = 0;
-    let failed = 0;
-
-    // Execute nodemailer requests concurrently in the batch for maximum speed
-    await Promise.all(
-      customers.map(async (c) => {
-        try {
-          await transporter.sendMail({
-            from: '"BestShield Campaign" <campaign@bestshield.com>',
-            to: c.email,
-            subject: `Special Announcement for ${c.name}`,
-            text: `Hello ${c.name},\n\nWe have an exciting update for you! Thank you for being a valued customer.\n\nBest regards,\nThe BestShield Team`,
-          });
-          success++;
-        } catch (e) {
-          failed++;
-        }
-      })
-    );
-
-    console.log(`[Batch ${batchIndex}/${totalBatches}] Completed. Sent: ${success}, Failed: ${failed}`);
-    return { success, failed, batchIndex };
+    return processJob(job, db, transporter);
   },
   {
     connection: redisConnection,
