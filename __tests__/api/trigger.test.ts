@@ -16,6 +16,7 @@ vi.mock('@/lib/campaign', () => {
 vi.mock('@/db/sqlite', () => {
   return {
     getCustomerCount: vi.fn().mockReturnValue(500),
+    getBatchStartIds: vi.fn().mockReturnValue([1, 201, 401]),
   };
 });
 
@@ -38,7 +39,7 @@ describe('API Route - Campaign Trigger Tests', () => {
 
     const data = await res.json();
     expect(data.message).toContain('Added 1 jobs to process 3 customers');
-    
+
     expect(campaignQueue.addBulk).toHaveBeenCalledTimes(1);
     expect(campaignQueue.addBulk).toHaveBeenCalledWith([
       {
@@ -66,12 +67,12 @@ describe('API Route - Campaign Trigger Tests', () => {
 
     const data = await res.json();
     expect(data.message).toContain('Added 3 jobs to process 500 customers');
-    
+
     expect(campaignQueue.addBulk).toHaveBeenCalledTimes(1);
     const addedJobs = (campaignQueue.addBulk as any).mock.calls[0][0];
     expect(addedJobs.length).toBe(3);
     expect(addedJobs[0].data).toEqual({
-      offset: 0,
+      lastId: 0,
       limit: 200,
       batchIndex: 1,
       totalBatches: 3,

@@ -29,17 +29,19 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function processJob(job, dbConnection, emailTransporter) {
-  const { customerIds, offset, limit, batchIndex, totalBatches } = job.data;
+  const { customerIds, lastId, offset, limit, batchIndex, totalBatches } = job.data;
   console.log(`[Batch ${batchIndex}/${totalBatches}] Processing Job ${job.id}...`);
 
   let customers = [];
   if (Array.isArray(customerIds) && customerIds.length > 0) {
     const placeholders = customerIds.map(() => '?').join(',');
     customers = dbConnection.prepare(`SELECT id, name, email FROM customers WHERE id IN (${placeholders})`).all(...customerIds);
+  } else if (lastId !== undefined && limit !== undefined) {
+    customers = dbConnection.prepare('SELECT id, name, email FROM customers WHERE id > ? ORDER BY id ASC LIMIT ?').all(lastId, limit);
   } else if (limit !== undefined && offset !== undefined) {
     customers = dbConnection.prepare('SELECT id, name, email FROM customers LIMIT ? OFFSET ?').all(limit, offset);
   } else {
-    throw new Error('Invalid job data: Job must provide customerIds or both limit and offset');
+    throw new Error('Invalid job data: Job must provide customerIds, lastId and limit, or limit and offset');
   }
 
   let success = 0;

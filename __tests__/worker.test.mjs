@@ -7,7 +7,7 @@ describe('Worker Script Unit Tests', () => {
       id: 'job-123',
       data: {
         customerIds: [],
-        offset: 0,
+        lastId: 0,
         limit: 2,
         batchIndex: 1,
         totalBatches: 10,
@@ -35,7 +35,7 @@ describe('Worker Script Unit Tests', () => {
     const result = await processJob(mockJob, mockDbConnection, mockEmailTransporter);
 
     expect(result).toEqual({ success: 2, failed: 0, batchIndex: 1 });
-    expect(mockPrepare).toHaveBeenCalledWith('SELECT id, name, email FROM customers LIMIT ? OFFSET ?');
+    expect(mockPrepare).toHaveBeenCalledWith('SELECT id, name, email FROM customers WHERE id > ? ORDER BY id ASC LIMIT ?');
     expect(mockSendMail).toHaveBeenCalledTimes(2);
   });
 
@@ -70,7 +70,7 @@ describe('Worker Script Unit Tests', () => {
     expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
 
-  test('processJob throws error on missing required data (customerIds and offset/limit)', async () => {
+  test('processJob throws error on missing required data', async () => {
     const mockJob = {
       id: 'job-789',
       data: {
@@ -84,6 +84,6 @@ describe('Worker Script Unit Tests', () => {
 
     await expect(
       processJob(mockJob, mockDbConnection, mockEmailTransporter)
-    ).rejects.toThrow('Invalid job data: Job must provide customerIds or both limit and offset');
+    ).rejects.toThrow('Invalid job data: Job must provide customerIds, lastId and limit, or limit and offset');
   });
 });

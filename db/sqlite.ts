@@ -46,3 +46,19 @@ export function queryCustomersByIds(ids: number[]): Customer[] {
     db.close();
   }
 }
+
+export function getBatchStartIds(batchSize: number): number[] {
+  const db = getDbConnection();
+  try {
+    const rows = db.prepare(`
+      WITH Ranked AS (
+        SELECT id, (ROW_NUMBER() OVER (ORDER BY id ASC) - 1) as row_idx
+        FROM customers
+      )
+      SELECT id FROM Ranked WHERE row_idx % ? = 0 ORDER BY id ASC
+    `).all(batchSize) as { id: number }[];
+    return rows.map((r) => r.id);
+  } finally {
+    db.close();
+  }
+}
