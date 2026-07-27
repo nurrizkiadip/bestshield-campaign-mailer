@@ -33,10 +33,16 @@ console.log('Starting BullMQ Campaign Worker...');
 const worker = new Worker(
   'campaignQueue',
   async (job) => {
-    const { offset, limit, batchIndex, totalBatches } = job.data;
+    const { customerIds, offset, limit, batchIndex, totalBatches } = job.data;
     console.log(`[Batch ${batchIndex}/${totalBatches}] Processing Job ${job.id}...`);
 
-    const customers = db.prepare('SELECT * FROM customers LIMIT ? OFFSET ?').all(limit, offset);
+    let customers = [];
+    if (Array.isArray(customerIds) && customerIds.length > 0) {
+      const placeholders = customerIds.map(() => '?').join(',');
+      customers = db.prepare(`SELECT * FROM customers WHERE id IN (${placeholders})`).all(...customerIds);
+    } else {
+      customers = db.prepare('SELECT * FROM customers LIMIT ? OFFSET ?').all(limit, offset);
+    }
 
     let success = 0;
     let failed = 0;
@@ -78,7 +84,7 @@ worker.on('failed', (job, err) => {
 process.on('SIGINT', async () => {
   console.log('Shutting down worker gracefully...');
   await worker.close();
-  try { db.close(); } catch (e) {}
+  try { db.close(); } catch (e) { }
   transporter.close();
   process.exit(0);
 });
