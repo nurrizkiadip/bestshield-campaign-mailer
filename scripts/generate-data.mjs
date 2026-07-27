@@ -3,11 +3,11 @@ import path from 'path';
 import fs from 'fs';
 
 const TOTAL_RECORDS = 1000000;
-const publicDir = path.join(process.cwd(), 'public');
-const dbPath = path.join(publicDir, 'customers.sqlite');
+const dataDir = path.join(process.cwd(), 'data');
+const dbPath = path.join(dataDir, 'customers.sqlite');
 
-if (!fs.existsSync(publicDir)) {
-  fs.mkdirSync(publicDir, { recursive: true });
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
 }
 
 // Remove existing database if it exists
