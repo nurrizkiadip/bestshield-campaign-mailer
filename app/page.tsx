@@ -38,6 +38,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const limit = 15;
 
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<number>>(new Set());
+  const [selectAll, setSelectAll] = useState<boolean>(false);
+
   const [campaignStatus, setCampaignStatus] = useState<CampaignStatus | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -86,15 +89,40 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
+  const toggleSelectCustomer = (id: number) => {
+    const next = new Set(selectedCustomerIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedCustomerIds(next);
+  };
+
+  const toggleSelectAll = () => {
+    const nextSelectAll = !selectAll;
+    setSelectAll(nextSelectAll);
+    if (nextSelectAll) {
+      setSelectedCustomerIds(new Set());
+    }
+  };
+
   const handleTriggerCampaign = async () => {
+    if (!selectAll && selectedCustomerIds.size === 0) return;
+
     setTriggering(true);
     try {
       const res = await fetch('/api/campaign/trigger', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sendToAll: selectAll,
+          customerIds: Array.from(selectedCustomerIds),
+        }),
       });
       const data = await res.json();
       if (res.ok || res.status === 202) {
-        setToastMessage('Email campaign queued in BullMQ! You can safely close or refresh this page.');
+        setToastMessage(data.message || 'Email campaign queued in BullMQ! You can safely close or refresh this page.');
         fetchCampaignStatus();
       } else {
         setToastMessage(data.message || data.error || 'Failed to trigger campaign.');
@@ -105,6 +133,20 @@ export default function Home() {
       setTriggering(false);
       setTimeout(() => setToastMessage(null), 6000);
     }
+  };
+
+  const isButtonDisabled =
+    triggering ||
+    campaignStatus?.status === 'running' ||
+    (!selectAll && selectedCustomerIds.size === 0);
+
+  const getButtonText = () => {
+    if (triggering) return 'Starting...';
+    if (campaignStatus?.status === 'running') return 'Campaign Running...';
+    if (selectAll) return 'Send Email to ALL Customers';
+    if (selectedCustomerIds.size > 0)
+      return `Send Email to ${selectedCustomerIds.size.toLocaleString()} Selected`;
+    return 'Select Customers to Email';
   };
 
   return (
@@ -127,19 +169,25 @@ export default function Home() {
             <h1 className="text-3xl font-bold text-slate-900">Campaign Mailer</h1>
             <p className="text-slate-600 text-sm mt-1">
               Total Customers: <span className="font-semibold text-slate-800">{totalRecords.toLocaleString()}</span>
+              {selectedCustomerIds.size > 0 && !selectAll && (
+                <span className="ml-2 text-indigo-600 font-medium">
+                  ({selectedCustomerIds.size.toLocaleString()} selected)
+                </span>
+              )}
+              {selectAll && (
+                <span className="ml-2 text-indigo-600 font-medium">
+                  (All {totalRecords.toLocaleString()} selected)
+                </span>
+              )}
             </p>
           </div>
 
           <button
             onClick={handleTriggerCampaign}
-            disabled={triggering || campaignStatus?.status === 'running'}
+            disabled={isButtonDisabled}
             className="px-5 py-2.5 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
-            {triggering
-              ? 'Starting...'
-              : campaignStatus?.status === 'running'
-                ? 'Campaign Running...'
-                : 'Trigger Email Campaign'}
+            {getButtonText()}
           </button>
         </div>
 
@@ -155,12 +203,13 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">Status:</span>
               <span
-                className={`px-3 py-1 text-xs font-bold rounded-full capitalize ${campaignStatus?.status === 'running'
-                  ? 'bg-amber-100 text-amber-800 animate-pulse'
-                  : campaignStatus?.status === 'completed'
+                className={`px-3 py-1 text-xs font-bold rounded-full capitalize ${
+                  campaignStatus?.status === 'running'
+                    ? 'bg-amber-100 text-amber-800 animate-pulse'
+                    : campaignStatus?.status === 'completed'
                     ? 'bg-emerald-100 text-emerald-800'
                     : 'bg-slate-100 text-slate-700'
-                  }`}
+                }`}
               >
                 {campaignStatus?.status || 'idle'}
               </span>
@@ -242,13 +291,27 @@ export default function Home() {
 
         {/* Customer Records Table */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-4 bg-slate-50 border-b border-slate-200 font-semibold text-slate-800 text-sm">
-            Customer Directory
+          <div className="p-4 bg-slate-50 border-b border-slate-200 font-semibold text-slate-800 text-sm flex justify-between items-center">
+            <span>Customer Directory</span>
+            {selectAll && (
+              <span className="text-xs font-normal text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                All database records selected
+              </span>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
+                  <th className="p-4 w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectAll}
+                      onChange={toggleSelectAll}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      title="Select All Customers in Database"
+                    />
+                  </th>
                   <th className="p-4 w-24">ID</th>
                   <th className="p-4">Name</th>
                   <th className="p-4">Email</th>
@@ -257,30 +320,42 @@ export default function Home() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={3} className="p-8 text-center text-slate-500">
+                    <td colSpan={4} className="p-8 text-center text-slate-500">
                       Loading data...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={3} className="p-8 text-center text-red-500 font-medium">
+                    <td colSpan={4} className="p-8 text-center text-red-500 font-medium">
                       {error}
                     </td>
                   </tr>
                 ) : customers.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="p-8 text-center text-slate-500">
+                    <td colSpan={4} className="p-8 text-center text-slate-500">
                       No records found.
                     </td>
                   </tr>
                 ) : (
-                  customers.map((customer) => (
-                    <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 text-slate-500 font-mono">{customer.id}</td>
-                      <td className="p-4 font-medium text-slate-800">{customer.name}</td>
-                      <td className="p-4 text-blue-600">{customer.email}</td>
-                    </tr>
-                  ))
+                  customers.map((customer) => {
+                    const isChecked = selectAll || selectedCustomerIds.has(customer.id);
+                    return (
+                      <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4 w-12 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={selectAll}
+                            onChange={() => toggleSelectCustomer(customer.id)}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
+                          />
+                        </td>
+                        <td className="p-4 text-slate-500 font-mono">{customer.id}</td>
+                        <td className="p-4 font-medium text-slate-800">{customer.name}</td>
+                        <td className="p-4 text-blue-600">{customer.email}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
