@@ -47,22 +47,26 @@ export async function processJob(job, dbConnection, emailTransporter) {
   let success = 0;
   let failed = 0;
 
-  // Execute nodemailer requests concurrently in the batch for maximum speed
-  await Promise.all(
-    customers.map(async (c) => {
-      try {
-        await emailTransporter.sendMail({
-          from: '"BestShield Campaign" <campaign@bestshield.com>',
-          to: c.email,
-          subject: `Special Announcement for ${c.name}`,
-          text: `Hello ${c.name},\n\nWe have an exciting update for you! Thank you for being a valued customer.\n\nBest regards,\nThe BestShield Team`,
-        });
-        success++;
-      } catch (e) {
-        failed++;
-      }
-    })
-  );
+  // Execute nodemailer requests concurrently in chunks to avoid memory bloat
+  const CONCURRENCY_LIMIT = 20;
+  for (let i = 0; i < customers.length; i += CONCURRENCY_LIMIT) {
+    const chunk = customers.slice(i, i + CONCURRENCY_LIMIT);
+    await Promise.all(
+      chunk.map(async (c) => {
+        try {
+          await emailTransporter.sendMail({
+            from: '"BestShield Campaign" <campaign@bestshield.com>',
+            to: c.email,
+            subject: `Special Announcement for ${c.name}`,
+            text: `Hello ${c.name},\n\nWe have an exciting update for you! Thank you for being a valued customer.\n\nBest regards,\nThe BestShield Team`,
+          });
+          success++;
+        } catch (e) {
+          failed++;
+        }
+      })
+    );
+  }
 
   console.log(`[Batch ${batchIndex}/${totalBatches}] Completed. Sent: ${success}, Failed: ${failed}`);
   return { success, failed, batchIndex };
