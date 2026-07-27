@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 
-const dbPath = path.join(process.cwd(), 'public', 'customers.sqlite');
+const dbPath = path.join(process.cwd(), 'data', 'customers.sqlite');
 
 function getDbConnection() {
   if (!fs.existsSync(dbPath)) {

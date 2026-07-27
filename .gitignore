@@ -47,4 +47,5 @@ next-env.d.ts
 *.sqlite3
 *.db
 *.db3
+/data
 
