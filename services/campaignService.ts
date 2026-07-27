@@ -1,5 +1,5 @@
 import { campaignQueue } from '@/lib/campaign';
-import { getCustomerCount } from '@/db/sqlite';
+import { getCustomerCount, getBatchStartIds } from '@/db/sqlite';
 
 const BATCH_SIZE = 200;
 
@@ -48,17 +48,19 @@ export async function triggerCampaign(customerIds: number[], sendToAll: boolean)
     }
   } else {
     totalTargeted = getCustomerCount();
-    if (totalTargeted === 0) {
+    const startIds = getBatchStartIds(BATCH_SIZE);
+
+    if (totalTargeted === 0 || startIds.length === 0) {
       throw new Error('No customers found to process.');
     }
 
-    totalBatches = Math.ceil(totalTargeted / BATCH_SIZE);
+    totalBatches = startIds.length;
 
     for (let i = 0; i < totalBatches; i++) {
       jobs.push({
         name: 'send-batch',
         data: {
-          offset: i * BATCH_SIZE,
+          lastId: startIds[i] - 1,
           limit: BATCH_SIZE,
           batchIndex: i + 1,
           totalBatches,
@@ -77,7 +79,7 @@ export async function triggerCampaign(customerIds: number[], sendToAll: boolean)
 
 export async function getCampaignStatus(): Promise<CampaignStatus> {
   const jobCounts = await campaignQueue.getJobCounts();
-  
+
   const waiting = jobCounts.waiting || 0;
   const active = jobCounts.active || 0;
   const completed = jobCounts.completed || 0;
@@ -88,7 +90,7 @@ export async function getCampaignStatus(): Promise<CampaignStatus> {
   const processed = completed;
 
   const percentage = totalJobs > 0 ? Number(((processed / totalJobs) * 100).toFixed(2)) : 0;
-  
+
   let status: 'idle' | 'running' | 'completed' = 'idle';
   if (totalJobs > 0) {
     if (processed + failed === totalJobs) {
