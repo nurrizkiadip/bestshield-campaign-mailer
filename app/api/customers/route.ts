@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
+import fs from 'fs';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -8,21 +9,25 @@ export async function GET(request: Request) {
   const limit = parseInt(searchParams.get('limit') || '20', 10);
 
   try {
-    const filePath = path.join(process.cwd(), 'public', 'customers.json');
+    const dbPath = path.join(process.cwd(), 'public', 'customers.sqlite');
 
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: 'Data file not found. Please run data generation.' }, { status: 404 });
+    if (!fs.existsSync(dbPath)) {
+      return NextResponse.json({ error: 'Database file not found. Please run data generation.' }, { status: 404 });
     }
 
-    const fileContents = fs.readFileSync(filePath, 'utf8');
-    const allCustomers = JSON.parse(fileContents);
+    const db = new DatabaseSync(dbPath);
 
-    const total = allCustomers.length;
+    // Retrieve total record count
+    const countRow = db.prepare('SELECT COUNT(*) as total FROM customers').get() as { total: number };
+    const total = countRow.total;
+    
+    // Retrieve paginated data instantly using LIMIT and OFFSET
+    const offset = (page - 1) * limit;
+    const paginatedCustomers = db.prepare('SELECT * FROM customers LIMIT ? OFFSET ?').all(limit, offset);
+
+    db.close();
+
     const totalPages = Math.ceil(total / limit);
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-
-    const paginatedCustomers = allCustomers.slice(startIndex, endIndex);
 
     return NextResponse.json({
       data: paginatedCustomers,
@@ -34,7 +39,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error('Error fetching customers:', error);
+    console.error('Error fetching customers from SQLite:', error);
     return NextResponse.json({ error: 'Failed to fetch customer data' }, { status: 500 });
   }
 }
