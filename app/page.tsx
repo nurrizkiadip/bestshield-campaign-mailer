@@ -18,6 +18,17 @@ type APIResponse = {
   };
 };
 
+type CampaignStatus = {
+  status: 'idle' | 'running' | 'completed';
+  percentage: number;
+  totalBatches: number;
+  completedBatches: number;
+  failedBatches: number;
+  activeBatches: number;
+  waitingBatches: number;
+  error?: string | null;
+};
+
 export default function Home() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [page, setPage] = useState(1);
@@ -26,6 +37,22 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const limit = 15;
+
+  const [campaignStatus, setCampaignStatus] = useState<CampaignStatus | null>(null);
+  const [triggering, setTriggering] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const fetchCampaignStatus = async () => {
+    try {
+      const res = await fetch('/api/campaign/status');
+      if (res.ok) {
+        const json: CampaignStatus = await res.json();
+        setCampaignStatus(json);
+      }
+    } catch (err) {
+      console.error('Error fetching campaign status:', err);
+    }
+  };
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -50,19 +77,174 @@ export default function Home() {
     fetchCustomers();
   }, [page]);
 
+  useEffect(() => {
+    fetchCampaignStatus();
+    const interval = setInterval(() => {
+      fetchCampaignStatus();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleTriggerCampaign = async () => {
+    setTriggering(true);
+    try {
+      const res = await fetch('/api/campaign/trigger', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok || res.status === 202) {
+        setToastMessage('Email campaign queued in BullMQ! You can safely close or refresh this page.');
+        fetchCampaignStatus();
+      } else {
+        setToastMessage(data.message || data.error || 'Failed to trigger campaign.');
+      }
+    } catch (err) {
+      setToastMessage('Error triggering background campaign.');
+    } finally {
+      setTriggering(false);
+      setTimeout(() => setToastMessage(null), 6000);
+    }
+  };
+
   return (
     <main className="min-h-screen p-8 bg-slate-50 text-slate-900">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {toastMessage && (
+          <div className="bg-blue-600 text-white p-4 rounded-lg shadow-md flex items-center justify-between transition-all">
+            <span className="text-sm font-medium">{toastMessage}</span>
+            <button
+              onClick={() => setToastMessage(null)}
+              className="text-white hover:text-slate-200 font-bold ml-4"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-lg shadow-sm border border-slate-200">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Customer Records</h1>
+            <h1 className="text-3xl font-bold text-slate-900">Campaign Mailer</h1>
             <p className="text-slate-600 text-sm mt-1">
               Total Customers: <span className="font-semibold text-slate-800">{totalRecords.toLocaleString()}</span>
             </p>
           </div>
+
+          <button
+            onClick={handleTriggerCampaign}
+            disabled={triggering || campaignStatus?.status === 'running'}
+            className="px-5 py-2.5 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+          >
+            {triggering
+              ? 'Starting...'
+              : campaignStatus?.status === 'running'
+                ? 'Campaign Running...'
+                : 'Trigger Email Campaign'}
+          </button>
         </div>
 
+        {/* Campaign Queue & Progress Dashboard */}
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">BullMQ Queue Progress</h2>
+              <p className="text-slate-500 text-xs mt-0.5">
+                Jobs run via background worker instances concurrently (200 emails per batch).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Status:</span>
+              <span
+                className={`px-3 py-1 text-xs font-bold rounded-full capitalize ${campaignStatus?.status === 'running'
+                  ? 'bg-amber-100 text-amber-800 animate-pulse'
+                  : campaignStatus?.status === 'completed'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-slate-100 text-slate-700'
+                  }`}
+              >
+                {campaignStatus?.status || 'idle'}
+              </span>
+            </div>
+          </div>
+
+          {campaignStatus && campaignStatus.totalBatches > 0 && (
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                  <span>
+                    Processed: {campaignStatus.completedBatches.toLocaleString()} / {campaignStatus.totalBatches.toLocaleString()} Batches
+                  </span>
+                  <span>{campaignStatus.percentage}%</span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="bg-indigo-600 h-3 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, campaignStatus.percentage)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center text-xs">
+                <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                  <span className="text-slate-500 block">Waiting in Queue</span>
+                  <span className="font-semibold text-amber-600 text-sm">
+                    {campaignStatus.waitingBatches}
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                  <span className="text-slate-500 block">Active Workers</span>
+                  <span className="font-semibold text-indigo-600 text-sm">
+                    {campaignStatus.activeBatches}
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                  <span className="text-slate-500 block">Completed Batches</span>
+                  <span className="font-semibold text-emerald-600 text-sm">
+                    {campaignStatus.completedBatches}
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                  <span className="text-slate-500 block">Failed Batches</span>
+                  <span className="font-semibold text-rose-600 text-sm">
+                    {campaignStatus.failedBatches}
+                  </span>
+                </div>
+              </div>
+
+              {campaignStatus.error && (
+                <div className="p-3 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-xs">
+                  {campaignStatus.error}
+                </div>
+              )}
+
+              <div className="pt-2 flex flex-wrap gap-4 text-xs text-indigo-600 font-medium">
+                <a
+                  href="/api/campaign/status"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:underline flex items-center gap-1"
+                >
+                  🔗 View Queue Status API (JSON)
+                </a>
+                {' '}|{' '}
+                <a
+                  href="http://localhost:1080"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:underline flex items-center gap-1 text-slate-600"
+                >
+                  📫 Open MailDev Inbox
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Customer Records Table */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 bg-slate-50 border-b border-slate-200 font-semibold text-slate-800 text-sm">
+            Customer Directory
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
