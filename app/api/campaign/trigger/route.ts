@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         message: `Campaign triggered. Added ${result.totalBatches} jobs to process ${result.totalTargeted} customers.`,
-        statusUrl: '/api/campaign/status',
+        campaignId: result.campaignId,
+        statusUrl: `/api/campaign/status?campaignId=${result.campaignId}`,
       },
       { status: 202 }
     );

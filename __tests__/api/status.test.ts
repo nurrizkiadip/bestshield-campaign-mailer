@@ -1,11 +1,13 @@
 import { GET } from '@/app/api/campaign/status/route';
 import { campaignQueue } from '@/lib/campaign';
+import { NextRequest } from 'next/server';
 import { expect, test, vi, beforeEach, describe } from 'vitest';
 
 vi.mock('@/lib/campaign', () => {
   return {
     campaignQueue: {
       getJobCounts: vi.fn(),
+      getJobs: vi.fn(),
     },
   };
 });
@@ -24,7 +26,8 @@ describe('API Route - Campaign Status Tests', () => {
       delayed: 0,
     });
 
-    const res = await GET();
+    const req = new NextRequest('http://localhost/api/campaign/status');
+    const res = await GET(req);
     expect(res.status).toBe(200);
 
     const data = await res.json();
@@ -48,7 +51,8 @@ describe('API Route - Campaign Status Tests', () => {
       delayed: 0,
     });
 
-    const res = await GET();
+    const req = new NextRequest('http://localhost/api/campaign/status');
+    const res = await GET(req);
     expect(res.status).toBe(200);
 
     const data = await res.json();
@@ -65,11 +69,38 @@ describe('API Route - Campaign Status Tests', () => {
       delayed: 0,
     });
 
-    const res = await GET();
+    const req = new NextRequest('http://localhost/api/campaign/status');
+    const res = await GET(req);
     expect(res.status).toBe(200);
 
     const data = await res.json();
     expect(data.status).toBe('completed');
     expect(data.percentage).toBe(90); // 18 / 20 * 100
+  });
+
+  test('Status filters by campaignId correctly when query param is present', async () => {
+    (campaignQueue.getJobs as any).mockImplementation(async (types: string[]) => {
+      if (types.includes('waiting')) return [{ data: { campaignId: 'c1' } }];
+      if (types.includes('active')) return [];
+      if (types.includes('completed')) return [{ data: { campaignId: 'c1' } }, { data: { campaignId: 'c2' } }];
+      if (types.includes('failed')) return [];
+      if (types.includes('delayed')) return [];
+      return [];
+    });
+
+    const req = new NextRequest('http://localhost/api/campaign/status?campaignId=c1');
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data).toEqual({
+      status: 'running',
+      percentage: 50, // 1 completed / 2 total (1 completed + 1 waiting) * 100
+      totalBatches: 2,
+      completedBatches: 1,
+      failedBatches: 0,
+      activeBatches: 0,
+      waitingBatches: 1,
+    });
   });
 });

@@ -16,15 +16,6 @@ export type CampaignStatus = {
 };
 
 export async function triggerCampaign(customerIds: number[], sendToAll: boolean) {
-  // Clean up previous jobs so the tracker resets accurately
-  try {
-    await campaignQueue.drain(true);
-    await campaignQueue.clean(0, 0, 'completed');
-    await campaignQueue.clean(0, 0, 'failed');
-  } catch (e) {
-    console.log('Queue cleanup error (can be ignored on fresh start):', e);
-  }
-
   const jobs = [];
   let totalTargeted = 0;
   let totalBatches = 0;
@@ -76,19 +67,43 @@ export async function triggerCampaign(customerIds: number[], sendToAll: boolean)
   await campaignQueue.addBulk(jobs);
 
   return {
+    campaignId,
     totalBatches,
     totalTargeted,
   };
 }
 
-export async function getCampaignStatus(): Promise<CampaignStatus> {
-  const jobCounts = await campaignQueue.getJobCounts();
+export async function getCampaignStatus(campaignId?: string): Promise<CampaignStatus> {
+  let waiting = 0;
+  let active = 0;
+  let completed = 0;
+  let failed = 0;
+  let delayed = 0;
 
-  const waiting = jobCounts.waiting || 0;
-  const active = jobCounts.active || 0;
-  const completed = jobCounts.completed || 0;
-  const failed = jobCounts.failed || 0;
-  const delayed = jobCounts.delayed || 0;
+  if (campaignId) {
+    const [waitingJobs, activeJobs, completedJobs, failedJobs, delayedJobs] = await Promise.all([
+      campaignQueue.getJobs(['waiting']),
+      campaignQueue.getJobs(['active']),
+      campaignQueue.getJobs(['completed']),
+      campaignQueue.getJobs(['failed']),
+      campaignQueue.getJobs(['delayed']),
+    ]);
+
+    const countJobs = (jobs: any[]) => jobs.filter((j) => j.data?.campaignId === campaignId).length;
+
+    waiting = countJobs(waitingJobs);
+    active = countJobs(activeJobs);
+    completed = countJobs(completedJobs);
+    failed = countJobs(failedJobs);
+    delayed = countJobs(delayedJobs);
+  } else {
+    const jobCounts = await campaignQueue.getJobCounts();
+    waiting = jobCounts.waiting || 0;
+    active = jobCounts.active || 0;
+    completed = jobCounts.completed || 0;
+    failed = jobCounts.failed || 0;
+    delayed = jobCounts.delayed || 0;
+  }
 
   const totalJobs = waiting + active + completed + failed + delayed;
   const processed = completed;

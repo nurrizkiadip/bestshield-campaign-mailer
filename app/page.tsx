@@ -42,12 +42,14 @@ export default function Home() {
   const [selectAll, setSelectAll] = useState<boolean>(false);
 
   const [campaignStatus, setCampaignStatus] = useState<CampaignStatus | null>(null);
+  const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const fetchCampaignStatus = async () => {
+  const fetchCampaignStatus = async (campaignId?: string | null) => {
     try {
-      const res = await fetch('/api/campaign/status');
+      const url = campaignId ? `/api/campaign/status?campaignId=${campaignId}` : '/api/campaign/status';
+      const res = await fetch(url);
       if (res.ok) {
         const json: CampaignStatus = await res.json();
         setCampaignStatus(json);
@@ -81,13 +83,13 @@ export default function Home() {
   }, [page]);
 
   useEffect(() => {
-    fetchCampaignStatus();
+    fetchCampaignStatus(activeCampaignId);
     const interval = setInterval(() => {
-      fetchCampaignStatus();
+      fetchCampaignStatus(activeCampaignId);
     }, 2000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [activeCampaignId]);
 
   const toggleSelectCustomer = (id: number) => {
     const next = new Set(selectedCustomerIds);
@@ -123,7 +125,12 @@ export default function Home() {
       const data = await res.json();
       if (res.ok || res.status === 202) {
         setToastMessage(data.message || 'Email campaign queued in BullMQ! You can safely close or refresh this page.');
-        fetchCampaignStatus();
+        if (data.campaignId) {
+          setActiveCampaignId(data.campaignId);
+          fetchCampaignStatus(data.campaignId);
+        } else {
+          fetchCampaignStatus();
+        }
       } else {
         setToastMessage(data.message || data.error || 'Failed to trigger campaign.');
       }
@@ -268,7 +275,7 @@ export default function Home() {
 
               <div className="pt-2 flex flex-wrap gap-4 text-xs text-indigo-600 font-medium">
                 <a
-                  href="/api/campaign/status"
+                  href={activeCampaignId ? `/api/campaign/status?campaignId=${activeCampaignId}` : '/api/campaign/status'}
                   target="_blank"
                   rel="noreferrer"
                   className="hover:underline flex items-center gap-1"

@@ -1,9 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { getCampaignStatus } from '@/services/campaignService';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const result = await getCampaignStatus();
+    const { searchParams } = new URL(req.url);
+    const campaignId = searchParams.get('campaignId') || undefined;
+    const result = await getCampaignStatus(campaignId);
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching queue status:', error);
