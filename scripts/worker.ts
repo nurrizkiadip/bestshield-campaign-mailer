@@ -76,7 +76,7 @@ export async function processJob(
             dbConnection.prepare('INSERT INTO email_outbox (campaign_id, customer_id) VALUES (?, ?)').run(campaignId, c.id);
           }
           success++;
-        } catch (e) {
+        } catch {
           failed++;
         }
       })
@@ -100,8 +100,8 @@ const worker = new Worker(
   }
 );
 
-worker.on('completed', (job) => {
-  // console.log(`Job ${job.id} has completed!`);
+worker.on('completed', () => {
+  // console.log(`Job has completed!`);
 });
 
 worker.on('failed', (job, err) => {
@@ -111,7 +111,7 @@ worker.on('failed', (job, err) => {
 process.on('SIGINT', async () => {
   console.log('Shutting down worker gracefully...');
   await worker.close();
-  try { db.close(); } catch (e) { }
+  try { db.close(); } catch {}
   transporter.close();
   process.exit(0);
 });
