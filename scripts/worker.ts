@@ -21,8 +21,8 @@ const transporter = nodemailer.createTransport({
   port: parseInt(process.env.SMTP_PORT || '1025', 10),
   secure: false,
   pool: true,
-  maxConnections: 5,
-  maxMessages: 100,
+  maxConnections: 50,
+  maxMessages: 10000,
   tls: { rejectUnauthorized: false },
 });
 
@@ -50,7 +50,7 @@ export async function processJob(
   let failed = 0;
 
   // Execute nodemailer requests concurrently in chunks to avoid memory bloat
-  const CONCURRENCY_LIMIT = 20;
+  const CONCURRENCY_LIMIT = 50;
   for (let i = 0; i < customers.length; i += CONCURRENCY_LIMIT) {
     const chunk = customers.slice(i, i + CONCURRENCY_LIMIT);
     await Promise.all(
@@ -96,7 +96,7 @@ const worker = new Worker(
   },
   {
     connection: redisConnection,
-    concurrency: 5, // Process 5 batches (1000 emails) concurrently per worker process!
+    concurrency: 10, // Process 10 batches (10000 emails) concurrently per worker process!
   }
 );
 
