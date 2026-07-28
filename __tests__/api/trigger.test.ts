@@ -54,7 +54,7 @@ describe('API Route - Campaign Trigger Tests', () => {
     ]);
   });
 
-  test('Global Triggering enqueues all database records in chunks of 200', async () => {
+  test('Global Triggering enqueues all database records in chunks of 1000', async () => {
     // 500 records -> 3 batches (200, 200, 100)
     const req = new NextRequest('http://localhost/api/campaign/trigger', {
       method: 'POST',
@@ -75,7 +75,7 @@ describe('API Route - Campaign Trigger Tests', () => {
     expect(addedJobs[0].data).toEqual({
       campaignId: expect.any(String),
       lastId: 0,
-      limit: 200,
+      limit: 1000,
       batchIndex: 1,
       totalBatches: 3,
     });

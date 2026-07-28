@@ -2,7 +2,7 @@ import { campaignQueue } from '@/lib/campaign';
 import { getCustomerCount, getBatchStartIds } from '@/db/sqlite';
 import crypto from 'crypto';
 
-const BATCH_SIZE = 200;
+const BATCH_SIZE = 1000;
 
 export type CampaignStatus = {
   status: 'idle' | 'running' | 'completed';

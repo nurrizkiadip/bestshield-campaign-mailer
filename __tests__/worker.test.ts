@@ -32,6 +32,7 @@ describe('Worker Script Unit Tests', () => {
 
     const mockDbConnection = {
       prepare: mockPrepare,
+      transaction: vi.fn().mockImplementation((cb) => cb),
     };
 
     const mockSendMail = vi.fn().mockResolvedValue({ messageId: 'some-id' });
@@ -71,6 +72,7 @@ describe('Worker Script Unit Tests', () => {
         }
         return { all: vi.fn().mockReturnValue(mockCustomers) };
       }),
+      transaction: vi.fn().mockImplementation((cb) => cb),
     };
 
     const mockSendMail = vi.fn().mockRejectedValue(new Error('SMTP connection error'));
