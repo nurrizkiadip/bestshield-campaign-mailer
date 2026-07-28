@@ -48,21 +48,29 @@ export async function processJob(
 
   let success = 0;
   let failed = 0;
+  const successfullySentIds: number[] = [];
+  const CONCURRENCY_LIMIT = 50;
+
+  let sentIds = new Set<number>();
+  if (campaignId && customers.length > 0) {
+    const ids = customers.map((c) => c.id);
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = dbConnection
+      .prepare(`SELECT customer_id FROM email_outbox WHERE campaign_id = ? AND customer_id IN (${placeholders})`)
+      .all(campaignId, ...ids) as { customer_id: number }[];
+    sentIds = new Set(rows.map((r) => r.customer_id));
+  }
 
   // Execute nodemailer requests concurrently in chunks to avoid memory bloat
-  const CONCURRENCY_LIMIT = 50;
   for (let i = 0; i < customers.length; i += CONCURRENCY_LIMIT) {
     const chunk = customers.slice(i, i + CONCURRENCY_LIMIT);
     await Promise.all(
       chunk.map(async (c) => {
         try {
           // This will ensure that the same email is not sent twice for the same campaign
-          if (campaignId) {
-            const alreadySent = dbConnection.prepare('SELECT id FROM email_outbox WHERE campaign_id = ? AND customer_id = ?').get(campaignId, c.id) as { id: number } | undefined;
-            if (alreadySent) {
-              success++;
-              return;
-            }
+          if (campaignId && sentIds.has(c.id)) {
+            success++;
+            return;
           }
 
           await emailTransporter.sendMail({
@@ -73,7 +81,7 @@ export async function processJob(
           });
 
           if (campaignId) {
-            dbConnection.prepare('INSERT INTO email_outbox (campaign_id, customer_id) VALUES (?, ?)').run(campaignId, c.id);
+            successfullySentIds.push(c.id);
           }
           success++;
         } catch {
@@ -81,6 +89,16 @@ export async function processJob(
         }
       })
     );
+  }
+
+  if (campaignId && successfullySentIds.length > 0) {
+    const insert = dbConnection.prepare('INSERT INTO email_outbox (campaign_id, customer_id) VALUES (?, ?)');
+    const insertMany = dbConnection.transaction((records: number[]) => {
+      for (const id of records) {
+        insert.run(campaignId, id);
+      }
+    });
+    insertMany(successfullySentIds);
   }
 
   console.log(`[Batch ${batchIndex}/${totalBatches}] Completed. Sent: ${success}, Failed: ${failed}`);
