@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
@@ -8,7 +8,7 @@ export function getDbConnection() {
   if (!fs.existsSync(dbPath)) {
     throw new Error('Database file not found. Please run data generation.');
   }
-  const db = new DatabaseSync(dbPath);
+  const db = new Database(dbPath);
   db.exec(`
     CREATE TABLE IF NOT EXISTS email_outbox (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
