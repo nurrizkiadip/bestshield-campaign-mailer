@@ -45,6 +45,7 @@ describe('API Route - Campaign Trigger Tests', () => {
       {
         name: 'send-batch',
         data: {
+          campaignId: expect.any(String),
           customerIds: [101, 102, 103],
           batchIndex: 1,
           totalBatches: 1,
@@ -72,6 +73,7 @@ describe('API Route - Campaign Trigger Tests', () => {
     const addedJobs = (campaignQueue.addBulk as any).mock.calls[0][0];
     expect(addedJobs.length).toBe(3);
     expect(addedJobs[0].data).toEqual({
+      campaignId: expect.any(String),
       lastId: 0,
       limit: 200,
       batchIndex: 1,
