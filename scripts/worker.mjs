@@ -1,22 +1,9 @@
 import { Worker } from 'bullmq';
-import IORedis from 'ioredis';
-import { DatabaseSync } from 'node:sqlite';
-import path from 'path';
 import nodemailer from 'nodemailer';
-import fs from 'fs';
+import { getDbConnection } from '../db/sqlite.ts';
+import { redisConnection } from '../lib/campaign.ts';
 
-const dbPath = path.join(process.cwd(), 'data', 'customers.sqlite');
-
-if (!fs.existsSync(dbPath)) {
-  throw new Error(`Database file not found at: ${dbPath}`);
-}
-const db = new DatabaseSync(dbPath);
-
-const redisConnection = new IORedis({
-  host: process.env.REDIS_HOST || '127.0.0.1',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  maxRetriesPerRequest: null,
-});
+const db = getDbConnection();
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || '127.0.0.1',
