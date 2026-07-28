@@ -37,11 +37,11 @@ export async function processJob(
   let customers: Customer[] = [];
   if (Array.isArray(customerIds) && customerIds.length > 0) {
     const placeholders = customerIds.map(() => '?').join(',');
-    customers = dbConnection.prepare(`SELECT id, name, email FROM customers WHERE id IN (${placeholders})`).all(...customerIds);
+    customers = dbConnection.prepare(`SELECT id, name, email FROM customers WHERE id IN (${placeholders})`).all(...customerIds) as Customer[];
   } else if (lastId !== undefined && limit !== undefined) {
-    customers = dbConnection.prepare('SELECT id, name, email FROM customers WHERE id > ? ORDER BY id ASC LIMIT ?').all(lastId, limit);
+    customers = dbConnection.prepare('SELECT id, name, email FROM customers WHERE id > ? ORDER BY id ASC LIMIT ?').all(lastId, limit) as Customer[];
   } else if (limit !== undefined && offset !== undefined) {
-    customers = dbConnection.prepare('SELECT id, name, email FROM customers LIMIT ? OFFSET ?').all(limit, offset);
+    customers = dbConnection.prepare('SELECT id, name, email FROM customers LIMIT ? OFFSET ?').all(limit, offset) as Customer[];
   } else {
     throw new Error('Invalid job data: Job must provide customerIds, lastId and limit, or limit and offset');
   }
