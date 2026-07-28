@@ -24,6 +24,8 @@ jobs:
 
       - name: Generate Database Data
         run: npm run db:generate
+        env:
+          TOTAL_RECORDS: 10000
 
       - name: Build Application
         run: npm run build

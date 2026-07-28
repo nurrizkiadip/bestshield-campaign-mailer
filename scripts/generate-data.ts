@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
-const TOTAL_RECORDS = 1000000;
+const TOTAL_RECORDS = process.env.TOTAL_RECORDS ? parseInt(process.env.TOTAL_RECORDS, 10) : 1000000;
 const dataDir = path.join(process.cwd(), 'data');
 const dbPath = path.join(dataDir, 'customers.sqlite');
 
