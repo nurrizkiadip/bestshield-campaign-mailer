@@ -1,36 +1,203 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BestShield Campaign Mailer
 
-## Getting Started
+A high-performance, asynchronous email campaign delivery system capable of processing and dispatching targeted or bulk campaign emails to thousands of customers. Built with **Next.js 16 (App Router)**, **BullMQ**, **Redis**, **SQLite**, and **Nodemailer**.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 📌 Project Overview
+
+**BestShield Campaign Mailer** provides a dashboard and robust background worker processing pipeline for email marketing campaigns. It allows administrators to:
+- Browse and paginate through 10,000+ customer records cleanly.
+- Select individual target customers or launch a campaign to **all** registered customers.
+- Offload heavy email delivery tasks asynchronously to a resilient **BullMQ** queue backed by **Redis**.
+- Track real-time campaign execution progress (waiting, active, completed, and failed jobs).
+- Inspect simulated outbound emails using **MailDev** in local development environments.
+
+---
+
+## 🏗️ Architecture & Project Structure
+
+The project follows a **Layered Architecture** separating raw data access, business domain services, HTTP controllers, and background job processing:
+
+```
+bestshield-campaign-mailer/
+├── app/                        # Next.js App Router (Controllers & UI)
+│   ├── api/                    # Controller Layer (HTTP Route Handlers)
+│   │   ├── campaign/
+│   │   │   ├── status/         # GET /api/campaign/status (Queue status)
+│   │   │   └── trigger/        # POST /api/campaign/trigger (Enqueue jobs)
+│   │   └── customers/          # GET /api/customers (Paginated list)
+│   ├── globals.css             # Tailwind CSS & UI styling
+│   ├── layout.tsx              # Root Layout
+│   └── page.tsx                # Dashboard UI (Customer Table & Campaign Trigger)
+├── db/                         # Database Access Layer
+│   └── sqlite.ts               # better-sqlite3 connection, queries & shared singleton
+├── services/                   # Business Domain Service Layer
+│   ├── campaignService.ts      # BullMQ queue management & campaign batching logic
+│   └── customerService.ts      # Customer pagination calculations
+├── lib/                        # Infrastructure Singletons
+│   └── campaign.ts             # Shared Redis connection & BullMQ Queue instance
+├── scripts/                    # Scripts & Background Workers
+│   ├── generate-data.ts        # Database seeder (Generates mock records via transactions)
+│   └── worker.ts               # BullMQ queue worker process (Nodemailer dispatcher)
+├── data/                       # Local data directory (contains customers.sqlite)
+├── __tests__/                  # Automated Test Suite (Vitest + React Testing Library)
+│   ├── api/                    # API Route handler unit/integration tests
+│   ├── page.test.tsx           # Dashboard integration UI tests
+│   └── worker.test.ts          # Queue worker job processor unit tests
+├── docker-compose.yml          # Local infra services (Redis & MailDev)
+├── vitest.config.ts            # Vitest test runner configuration
+└── package.json
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🛠️ Tech Stack & Libraries
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Core Framework & Runtimes
+- **Framework**: [Next.js 16.2](https://nextjs.org/) (App Router, Server Components & Route Handlers)
+- **UI Library**: [React 19](https://react.dev/)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Script Runner**: `tsx` (for natively executing TS scripts like workers)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
 
-## Learn More
+### Database & Queue Management
+- **Database**: [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) (high-performance synchronous SQLite driver)
+- **Queue System**: [BullMQ](https://docs.bullmq.io/)
+- **Cache / In-Memory Data Store**: [Redis](https://redis.io/) (`ioredis`)
 
-To learn more about Next.js, take a look at the following resources:
+### Emailing & Development Services
+- **SMTP Transporter**: [Nodemailer](https://nodemailer.com/)
+- **Email Sandbox (Local)**: [MailDev](https://github.com/maildev/maildev) (Dockerized SMTP & Web Webmail UI)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Automated Testing
+- **Test Runner**: [Vitest](https://vitest.dev/)
+- **DOM Testing**: `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`
+- **Environment**: `jsdom`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 📊 Database Schema & Data Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The application uses an SQLite database (`data/customers.sqlite`).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### `customers` Table
+
+| Column Name | Data Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY` | Unique customer identifier |
+| `name` | `TEXT` | `NOT NULL` | Customer full name |
+| `email` | `TEXT` | `NOT NULL` | Customer email address |
+
+### `email_outbox` Table
+
+| Column Name | Data Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` | Unique outbox record ID |
+| `campaign_id` | `TEXT` | `NOT NULL` | The ID of the campaign |
+| `customer_id` | `INTEGER` | `NOT NULL` | The recipient ID |
+| `sent_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Dispatch timestamp |
+
+*Note: The combination of `campaign_id` and `customer_id` has a `UNIQUE` constraint to prevent duplicate emails per campaign.*
+
+---
+
+## ⚙️ Environment Variables
+
+Copy the example environment file to configure your local setup:
+
+```bash
+cp .env.example .env
+```
+
+Default `.env` configuration:
+
+```env
+# Redis Configuration (Used by BullMQ for background job queues)
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+
+# SMTP Configuration (Used by Nodemailer for sending emails)
+# If running MailDev locally, it defaults to port 1025
+SMTP_HOST=127.0.0.1
+SMTP_PORT=1025
+```
+
+---
+
+## 🚀 How to Setup the Project
+
+### 1. Prerequisites
+- **Node.js**: `v22.x` or later
+- **Docker & Docker Compose**: For running local Redis and MailDev instances
+- **npm** / **pnpm** / **yarn**
+
+### 2. Install Dependencies
+```bash
+npm install
+```
+
+### 3. Start Infrastructure Services (Redis & MailDev)
+Launch Redis (port 6379) and MailDev (SMTP port 1025, Web UI port 1080):
+```bash
+docker compose up -d
+```
+
+### 4. Generate Mock Data (Seeding)
+Seed the SQLite database with 10,000 customer records:
+```bash
+npm run db:generate
+```
+*Note: This creates `data/customers.sqlite` using SQLite WAL mode for fast writes.*
+
+---
+
+## 🏃 How to Run the Application
+
+To run the complete system, you need to run **three** components:
+
+### Step 1: Ensure Redis & MailDev are Running
+```bash
+docker compose up -d
+```
+- **MailDev Web UI**: Accessible at [http://localhost:1080](http://localhost:1080) to preview outgoing emails.
+
+### Step 2: Start the Background Queue Worker
+In a dedicated terminal window:
+```bash
+npm run worker
+```
+*This process listens to the BullMQ `campaignQueue` and processes email sending concurrently (5 batches / 1000 emails per batch).*
+
+### Step 3: Start Next.js Development Server
+In another terminal window:
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser to access the Campaign Mailer Dashboard.
+
+---
+
+## 🧪 How to Run Automated Tests
+
+The application features a comprehensive test suite powered by **Vitest** covering page interactions, API controllers, service methods, and background worker processing.
+
+### Run All Tests Once
+```bash
+npm run test
+```
+
+### Run Tests in Watch Mode
+```bash
+npm run test:watch
+```
+
+---
+
+## 📡 API Endpoints Summary
+
+| Method | Endpoint | Description | Query / Body Params |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/customers` | Fetch paginated customer records | `?page=1&limit=20` |
+| `POST` | `/api/campaign/trigger` | Queue email dispatch jobs | Body: `{ sendToAll: boolean, customerIds?: number[] }` |
+| `GET` | `/api/campaign/status` | Get campaign progress & job metrics | None |
