@@ -29,7 +29,7 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function processJob(job, dbConnection, emailTransporter) {
-  const { customerIds, lastId, offset, limit, batchIndex, totalBatches } = job.data;
+  const { campaignId, customerIds, lastId, offset, limit, batchIndex, totalBatches } = job.data;
   console.log(`[Batch ${batchIndex}/${totalBatches}] Processing Job ${job.id}...`);
 
   let customers = [];
@@ -54,12 +54,25 @@ export async function processJob(job, dbConnection, emailTransporter) {
     await Promise.all(
       chunk.map(async (c) => {
         try {
+          // This will ensure that the same email is not sent twice for the same campaign
+          if (campaignId) {
+            const alreadySent = dbConnection.prepare('SELECT id FROM email_outbox WHERE campaign_id = ? AND customer_id = ?').get(campaignId, c.id);
+            if (alreadySent) {
+              success++;
+              return;
+            }
+          }
+
           await emailTransporter.sendMail({
             from: '"BestShield Campaign" <campaign@bestshield.com>',
             to: c.email,
             subject: `Special Announcement for ${c.name}`,
             text: `Hello ${c.name},\n\nWe have an exciting update for you! Thank you for being a valued customer.\n\nBest regards,\nThe BestShield Team`,
           });
+
+          if (campaignId) {
+            dbConnection.prepare('INSERT INTO email_outbox (campaign_id, customer_id) VALUES (?, ?)').run(campaignId, c.id);
+          }
           success++;
         } catch (e) {
           failed++;

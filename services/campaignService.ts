@@ -1,5 +1,6 @@
 import { campaignQueue } from '@/lib/campaign';
 import { getCustomerCount, getBatchStartIds } from '@/db/sqlite';
+import crypto from 'crypto';
 
 const BATCH_SIZE = 200;
 
@@ -27,6 +28,7 @@ export async function triggerCampaign(customerIds: number[], sendToAll: boolean)
   const jobs = [];
   let totalTargeted = 0;
   let totalBatches = 0;
+  const campaignId = crypto.randomUUID();
 
   if (!sendToAll) {
     if (!Array.isArray(customerIds) || customerIds.length === 0) {
@@ -40,6 +42,7 @@ export async function triggerCampaign(customerIds: number[], sendToAll: boolean)
       jobs.push({
         name: 'send-batch',
         data: {
+          campaignId,
           customerIds: chunk,
           batchIndex: i + 1,
           totalBatches,
@@ -60,6 +63,7 @@ export async function triggerCampaign(customerIds: number[], sendToAll: boolean)
       jobs.push({
         name: 'send-batch',
         data: {
+          campaignId,
           lastId: startIds[i] - 1,
           limit: BATCH_SIZE,
           batchIndex: i + 1,

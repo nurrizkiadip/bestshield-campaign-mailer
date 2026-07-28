@@ -6,6 +6,7 @@ describe('Worker Script Unit Tests', () => {
     const mockJob = {
       id: 'job-123',
       data: {
+        campaignId: 'test-campaign-123',
         customerIds: [],
         lastId: 0,
         limit: 2,
@@ -19,8 +20,14 @@ describe('Worker Script Unit Tests', () => {
       { id: 2, name: 'Bob', email: 'bob@example.com' },
     ];
 
-    const mockPrepare = vi.fn().mockReturnValue({
-      all: vi.fn().mockReturnValue(mockCustomers),
+    const mockPrepare = vi.fn().mockImplementation((query) => {
+      if (query.includes('SELECT id FROM email_outbox')) {
+        return { get: vi.fn().mockReturnValue(null) };
+      }
+      if (query.includes('INSERT INTO email_outbox')) {
+        return { run: vi.fn() };
+      }
+      return { all: vi.fn().mockReturnValue(mockCustomers) };
     });
 
     const mockDbConnection = {
@@ -43,6 +50,7 @@ describe('Worker Script Unit Tests', () => {
     const mockJob = {
       id: 'job-456',
       data: {
+        campaignId: 'test-campaign-456',
         customerIds: [10],
         batchIndex: 1,
         totalBatches: 1,
@@ -54,8 +62,14 @@ describe('Worker Script Unit Tests', () => {
     ];
 
     const mockDbConnection = {
-      prepare: vi.fn().mockReturnValue({
-        all: vi.fn().mockReturnValue(mockCustomers),
+      prepare: vi.fn().mockImplementation((query) => {
+        if (query.includes('SELECT id FROM email_outbox')) {
+          return { get: vi.fn().mockReturnValue(null) };
+        }
+        if (query.includes('INSERT INTO email_outbox')) {
+          return { run: vi.fn() };
+        }
+        return { all: vi.fn().mockReturnValue(mockCustomers) };
       }),
     };
 

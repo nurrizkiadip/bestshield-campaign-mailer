@@ -8,7 +8,17 @@ function getDbConnection() {
   if (!fs.existsSync(dbPath)) {
     throw new Error('Database file not found. Please run data generation.');
   }
-  return new DatabaseSync(dbPath);
+  const db = new DatabaseSync(dbPath);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS email_outbox (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id TEXT NOT NULL,
+      customer_id INTEGER NOT NULL,
+      sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(campaign_id, customer_id)
+    )
+  `);
+  return db;
 }
 
 export type Customer = {
