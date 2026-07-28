@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
@@ -15,8 +15,8 @@ if (fs.existsSync(dbPath)) {
   fs.unlinkSync(dbPath);
 }
 
-const db = new DatabaseSync(dbPath);
-db.exec('PRAGMA journal_mode = WAL'); // Performance optimization
+const db = new Database(dbPath);
+db.pragma('journal_mode = WAL'); // Performance optimization
 
 // Create table
 db.exec(`
@@ -31,14 +31,15 @@ console.log('Generating dummy data in SQLite (using node:sqlite)...');
 
 const insert = db.prepare('INSERT INTO customers (id, name, email) VALUES (?, ?, ?)');
 
-db.exec('BEGIN TRANSACTION');
-for (let i = 1; i <= TOTAL_RECORDS; i++) {
-  insert.run(i, `Customer ${i}`, `customer${i}@example.com`);
-  if (i % 100000 === 0) {
-    console.log(`Inserted ${i} records...`);
+const insertMany = db.transaction(() => {
+  for (let i = 1; i <= TOTAL_RECORDS; i++) {
+    insert.run(i, `Customer ${i}`, `customer${i}@example.com`);
+    if (i % 10000 === 0) {
+      console.log(`Inserted ${i} records...`);
+    }
   }
-}
-db.exec('COMMIT');
+});
+insertMany();
 
 db.close();
 

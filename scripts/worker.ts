@@ -1,6 +1,6 @@
 import { Worker, Job } from 'bullmq';
 import nodemailer from 'nodemailer';
-import { DatabaseSync } from 'node:sqlite';
+import Database from 'better-sqlite3';
 import { getDbConnection, Customer } from '@/db/sqlite';
 import { redisConnection } from '@/lib/campaign';
 
@@ -28,7 +28,7 @@ const transporter = nodemailer.createTransport({
 
 export async function processJob(
   job: Job<JobData>,
-  dbConnection: DatabaseSync,
+  dbConnection: Database.Database,
   emailTransporter: nodemailer.Transporter
 ) {
   const { campaignId, customerIds, lastId, offset, limit, batchIndex, totalBatches } = job.data;
