@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 
-const TOTAL_RECORDS = 1000000;
+const TOTAL_RECORDS = 10000;
 const dataDir = path.join(process.cwd(), 'data');
 const dbPath = path.join(dataDir, 'customers.sqlite');
 

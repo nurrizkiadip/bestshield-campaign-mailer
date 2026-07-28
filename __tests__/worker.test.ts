@@ -1,4 +1,4 @@
-import { processJob } from '@/scripts/worker.mjs';
+import { processJob } from '@/scripts/worker';
 import { expect, test, vi, describe } from 'vitest';
 
 describe('Worker Script Unit Tests', () => {
