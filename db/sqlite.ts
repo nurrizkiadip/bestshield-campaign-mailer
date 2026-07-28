@@ -4,7 +4,7 @@ import fs from 'fs';
 
 const dbPath = path.join(process.cwd(), 'data', 'customers.sqlite');
 
-function getDbConnection() {
+export function getDbConnection() {
   if (!fs.existsSync(dbPath)) {
     throw new Error('Database file not found. Please run data generation.');
   }

@@ -1,22 +1,20 @@
-import { Worker } from 'bullmq';
-import IORedis from 'ioredis';
-import { DatabaseSync } from 'node:sqlite';
-import path from 'path';
+import { Worker, Job } from 'bullmq';
 import nodemailer from 'nodemailer';
-import fs from 'fs';
+import { DatabaseSync } from 'node:sqlite';
+import { getDbConnection, Customer } from '@/db/sqlite';
+import { redisConnection } from '@/lib/campaign';
 
-const dbPath = path.join(process.cwd(), 'data', 'customers.sqlite');
-
-if (!fs.existsSync(dbPath)) {
-  throw new Error(`Database file not found at: ${dbPath}`);
+interface JobData {
+  campaignId?: string;
+  customerIds?: number[];
+  lastId?: number;
+  offset?: number;
+  limit?: number;
+  batchIndex: number;
+  totalBatches: number;
 }
-const db = new DatabaseSync(dbPath);
 
-const redisConnection = new IORedis({
-  host: process.env.REDIS_HOST || '127.0.0.1',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  maxRetriesPerRequest: null,
-});
+const db = getDbConnection();
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || '127.0.0.1',
@@ -28,11 +26,15 @@ const transporter = nodemailer.createTransport({
   tls: { rejectUnauthorized: false },
 });
 
-export async function processJob(job, dbConnection, emailTransporter) {
+export async function processJob(
+  job: Job<JobData>,
+  dbConnection: DatabaseSync,
+  emailTransporter: nodemailer.Transporter
+) {
   const { campaignId, customerIds, lastId, offset, limit, batchIndex, totalBatches } = job.data;
   console.log(`[Batch ${batchIndex}/${totalBatches}] Processing Job ${job.id}...`);
 
-  let customers = [];
+  let customers: Customer[] = [];
   if (Array.isArray(customerIds) && customerIds.length > 0) {
     const placeholders = customerIds.map(() => '?').join(',');
     customers = dbConnection.prepare(`SELECT id, name, email FROM customers WHERE id IN (${placeholders})`).all(...customerIds);
@@ -56,7 +58,7 @@ export async function processJob(job, dbConnection, emailTransporter) {
         try {
           // This will ensure that the same email is not sent twice for the same campaign
           if (campaignId) {
-            const alreadySent = dbConnection.prepare('SELECT id FROM email_outbox WHERE campaign_id = ? AND customer_id = ?').get(campaignId, c.id);
+            const alreadySent = dbConnection.prepare('SELECT id FROM email_outbox WHERE campaign_id = ? AND customer_id = ?').get(campaignId, c.id) as { id: number } | undefined;
             if (alreadySent) {
               success++;
               return;
@@ -89,7 +91,7 @@ console.log('Starting BullMQ Campaign Worker...');
 
 const worker = new Worker(
   'campaignQueue',
-  async (job) => {
+  async (job: Job<JobData>) => {
     return processJob(job, db, transporter);
   },
   {
