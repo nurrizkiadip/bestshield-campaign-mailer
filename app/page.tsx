@@ -81,6 +81,7 @@ export default function Home() {
   }, [page]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCampaignStatus();
     const interval = setInterval(() => {
       fetchCampaignStatus();
@@ -127,7 +128,7 @@ export default function Home() {
       } else {
         setToastMessage(data.message || data.error || 'Failed to trigger campaign.');
       }
-    } catch (err) {
+    } catch {
       setToastMessage('Error triggering background campaign.');
     } finally {
       setTriggering(false);
