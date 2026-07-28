@@ -1,13 +1,13 @@
 # BestShield Campaign Mailer
 
-A high-performance, asynchronous email campaign delivery system capable of processing and dispatching targeted or bulk campaign emails to millions of customers. Built with **Next.js 16 (App Router)**, **BullMQ**, **Redis**, **SQLite**, and **Nodemailer**.
+A high-performance, asynchronous email campaign delivery system capable of processing and dispatching targeted or bulk campaign emails to thousands of customers. Built with **Next.js 16 (App Router)**, **BullMQ**, **Redis**, **SQLite**, and **Nodemailer**.
 
 ---
 
 ## 📌 Project Overview
 
 **BestShield Campaign Mailer** provides a dashboard and robust background worker processing pipeline for email marketing campaigns. It allows administrators to:
-- Browse and paginate through 1,000,000+ customer records cleanly.
+- Browse and paginate through 10,000+ customer records cleanly.
 - Select individual target customers or launch a campaign to **all** registered customers.
 - Offload heavy email delivery tasks asynchronously to a resilient **BullMQ** queue backed by **Redis**.
 - Track real-time campaign execution progress (waiting, active, completed, and failed jobs).
@@ -31,20 +31,20 @@ bestshield-campaign-mailer/
 │   ├── layout.tsx              # Root Layout
 │   └── page.tsx                # Dashboard UI (Customer Table & Campaign Trigger)
 ├── db/                         # Database Access Layer
-│   └── sqlite.ts               # Node SQLite connection & raw SQL queries
+│   └── sqlite.ts               # better-sqlite3 connection, queries & shared singleton
 ├── services/                   # Business Domain Service Layer
 │   ├── campaignService.ts      # BullMQ queue management & campaign batching logic
 │   └── customerService.ts      # Customer pagination calculations
 ├── lib/                        # Infrastructure Singletons
 │   └── campaign.ts             # Shared Redis connection & BullMQ Queue instance
 ├── scripts/                    # Scripts & Background Workers
-│   ├── generate-data.mjs       # Database seeder (Generates 1,000,000 mock records)
-│   └── worker.mjs              # BullMQ queue worker process (Nodemailer dispatcher)
-├── public/                     # Static assets (contains customer.sqlite database file)
+│   ├── generate-data.ts        # Database seeder (Generates mock records via transactions)
+│   └── worker.ts               # BullMQ queue worker process (Nodemailer dispatcher)
+├── data/                       # Local data directory (contains customers.sqlite)
 ├── __tests__/                  # Automated Test Suite (Vitest + React Testing Library)
 │   ├── api/                    # API Route handler unit/integration tests
 │   ├── page.test.tsx           # Dashboard integration UI tests
-│   └── worker.test.mjs         # Queue worker job processor unit tests
+│   └── worker.test.ts          # Queue worker job processor unit tests
 ├── docker-compose.yml          # Local infra services (Redis & MailDev)
 ├── vitest.config.ts            # Vitest test runner configuration
 └── package.json
@@ -58,10 +58,11 @@ bestshield-campaign-mailer/
 - **Framework**: [Next.js 16.2](https://nextjs.org/) (App Router, Server Components & Route Handlers)
 - **UI Library**: [React 19](https://react.dev/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Script Runner**: `tsx` (for natively executing TS scripts like workers)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
 
 ### Database & Queue Management
-- **Database**: Node Native SQLite (`node:sqlite` via `DatabaseSync`)
+- **Database**: [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) (high-performance synchronous SQLite driver)
 - **Queue System**: [BullMQ](https://docs.bullmq.io/)
 - **Cache / In-Memory Data Store**: [Redis](https://redis.io/) (`ioredis`)
 
@@ -78,7 +79,7 @@ bestshield-campaign-mailer/
 
 ## 📊 Database Schema & Data Structure
 
-The application uses an SQLite database (`public/customers.sqlite`).
+The application uses an SQLite database (`data/customers.sqlite`).
 
 ### `customers` Table
 
@@ -87,6 +88,17 @@ The application uses an SQLite database (`public/customers.sqlite`).
 | `id` | `INTEGER` | `PRIMARY KEY` | Unique customer identifier |
 | `name` | `TEXT` | `NOT NULL` | Customer full name |
 | `email` | `TEXT` | `NOT NULL` | Customer email address |
+
+### `email_outbox` Table
+
+| Column Name | Data Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` | Unique outbox record ID |
+| `campaign_id` | `TEXT` | `NOT NULL` | The ID of the campaign |
+| `customer_id` | `INTEGER` | `NOT NULL` | The recipient ID |
+| `sent_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Dispatch timestamp |
+
+*Note: The combination of `campaign_id` and `customer_id` has a `UNIQUE` constraint to prevent duplicate emails per campaign.*
 
 ---
 
@@ -116,7 +128,7 @@ SMTP_PORT=1025
 ## 🚀 How to Setup the Project
 
 ### 1. Prerequisites
-- **Node.js**: `v22.x` or later (required for native `node:sqlite` support)
+- **Node.js**: `v22.x` or later
 - **Docker & Docker Compose**: For running local Redis and MailDev instances
 - **npm** / **pnpm** / **yarn**
 
@@ -132,11 +144,11 @@ docker compose up -d
 ```
 
 ### 4. Generate Mock Data (Seeding)
-Seed the SQLite database with 1,000,000 customer records:
+Seed the SQLite database with 10,000 customer records:
 ```bash
-node scripts/generate-data.mjs
+npm run db:generate
 ```
-*Note: This creates `public/customers.sqlite` using SQLite WAL mode for fast writes.*
+*Note: This creates `data/customers.sqlite` using SQLite WAL mode for fast writes.*
 
 ---
 
@@ -153,7 +165,7 @@ docker compose up -d
 ### Step 2: Start the Background Queue Worker
 In a dedicated terminal window:
 ```bash
-node scripts/worker.mjs
+npm run worker
 ```
 *This process listens to the BullMQ `campaignQueue` and processes email sending concurrently (5 batches / 1000 emails per batch).*
 
